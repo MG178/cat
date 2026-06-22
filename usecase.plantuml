@@ -1,0 +1,74 @@
+@startuml
+' Диаграмма вариантов использования (Use Case)
+' для системы CollegeHub (учебная платформа колледжа)
+' Вертикальная группировка по ролям с прямыми линиями
+
+skinparam linetype ortho
+skinparam usecase {
+  BackgroundColor white
+  BorderColor black
+  FontColor black
+  FontSize 12
+}
+skinparam rectangle {
+  BackgroundColor #F0F8FF
+  BorderColor #4682B4
+  FontColor #000080
+  FontSize 13
+  FontStyle bold
+}
+skinparam actor {
+  BackgroundColor #E6E6FA
+  BorderColor #4B0082
+  FontColor #4B0082
+  FontSize 13
+}
+skinparam arrow {
+  Color #333
+}
+
+left to right direction
+
+' Акторы
+actor "Администратор" as Admin
+actor "Студент" as Student
+
+' Блоки вариантов использования по ролям
+rectangle "Аутентификация" {
+  usecase "Войти в систему" as Auth
+}
+
+rectangle "Функции студента" {
+  usecase "Просмотреть расписание" as UC_ViewSchedule
+  usecase "Отметить посещаемость\n(сканировать QR-код)" as UC_MarkAttendance
+  usecase "Просмотреть историю\nпосещаемости" as UC_ViewHistory
+}
+
+rectangle "Функции администратора" {
+  usecase "Управлять пользователями" as UC_ManageUsers
+  usecase "Управлять группами" as UC_ManageGroups
+  usecase "Управлять предметами" as UC_ManageSubjects
+  usecase "Управлять расписанием" as UC_ManageSchedule
+  usecase "Генерировать QR-код\nдля занятия" as UC_GenerateQR
+  usecase "Деактивировать QR-сессию" as UC_DeactivateQR
+  usecase "Просматривать статистику\nпосещаемости" as UC_ViewStats
+}
+
+' Связи акторов с соответствующими блоками
+Student --> UC_ViewSchedule
+Student --> UC_MarkAttendance
+Student --> UC_ViewHistory
+
+Admin --> UC_ManageUsers
+Admin --> UC_ManageGroups
+Admin --> UC_ManageSubjects
+Admin --> UC_ManageSchedule
+Admin --> UC_GenerateQR
+Admin --> UC_DeactivateQR
+Admin --> UC_ViewStats
+
+' Все акторы могут авторизоваться
+Student --> Auth
+Admin --> Auth
+
+@enduml

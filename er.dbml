@@ -1,0 +1,108 @@
+// ======================================================================
+// DBML код для базы данных "CollegeHub" 
+// (Автоматизация учебной платформы колледжа)
+// Версия: 1.0 для dbdiagram.io
+// ======================================================================
+
+// --------------------------------------
+// Таблица roles (роли пользователей)
+// --------------------------------------
+Table roles {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  name nvarchar(50) [not null, unique, note: 'CHECK (name IN (\'admin\',\'teacher\',\'student\'))']
+}
+
+// --------------------------------------
+// Таблица groups (учебные группы)
+// --------------------------------------
+Table groups {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  name nvarchar(50) [not null, unique]
+  course int [not null, note: 'CHECK (course BETWEEN 1 AND 4)']
+  department nvarchar(100) [not null]
+}
+
+// --------------------------------------
+// Таблица users (пользователи системы)
+// --------------------------------------
+Table users {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  full_name nvarchar(150) [not null]
+  email nvarchar(100) [not null, unique]
+  password_hash nvarchar(255) [not null]
+  role_id int [not null, note: 'FK -> roles.id (ON DELETE NO ACTION, ON UPDATE CASCADE)']
+  group_id int [null, note: 'FK -> groups.id (ON DELETE SET NULL, ON UPDATE CASCADE)']
+  created_at datetime2 [not null, default: `getdate()`]
+  // Студент (role_id=3) обязан иметь группу, остальные роли – нет
+  note: 'CHECK ((role_id = 3 AND group_id IS NOT NULL) OR (role_id <> 3 AND group_id IS NULL))'
+}
+
+// --------------------------------------
+// Таблица subjects (учебные предметы)
+// --------------------------------------
+Table subjects {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  name nvarchar(150) [not null, unique]
+  teacher_id int [null, note: 'FK -> users.id (ON DELETE SET NULL, ON UPDATE CASCADE)']
+}
+
+// --------------------------------------
+// Таблица schedule (расписание занятий)
+// --------------------------------------
+Table schedule {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  group_id int [not null, note: 'FK -> groups.id (ON DELETE CASCADE, ON UPDATE CASCADE)']
+  subject_id int [not null, note: 'FK -> subjects.id (ON DELETE CASCADE, ON UPDATE CASCADE)']
+  teacher_id int [null, note: 'FK -> users.id (ON DELETE SET NULL, ON UPDATE CASCADE)']
+  room nvarchar(50) [not null]
+  start_time time [not null]
+  end_time time [not null]
+  day_of_week nvarchar(10) [not null, note: 'CHECK (day_of_week IN (\'Monday\',\'Tuesday\',\'Wednesday\',\'Thursday\',\'Friday\',\'Saturday\'))']
+  lesson_type nvarchar(10) [not null, default: 'lecture', note: 'CHECK (lesson_type IN (\'lecture\',\'practice\',\'lab\'))']
+  // Уникальность: у одной группы в один день и время не может быть двух занятий
+  indexes {
+    (group_id, day_of_week, start_time) [unique, name: 'UQ_schedule_group_day_time']
+  }
+  note: 'CHECK (start_time < end_time)'
+}
+
+// --------------------------------------
+// Таблица qr_sessions (QR-сессии для занятий)
+// --------------------------------------
+Table qr_sessions {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  schedule_id int [not null, note: 'FK -> schedule.id (ON DELETE CASCADE, ON UPDATE CASCADE)']
+  qr_code_data nvarchar(255) [not null, unique]
+  generated_at datetime2 [not null, default: `getdate()`]
+  expires_at datetime2 [not null]
+  is_active bit [not null, default: true]
+  note: 'CHECK (expires_at > generated_at)'
+}
+
+// --------------------------------------
+// Таблица attendance (посещаемость)
+// --------------------------------------
+Table attendance {
+  id int [pk, increment, note: 'IDENTITY(1,1)']
+  user_id int [not null, note: 'FK -> users.id (ON DELETE CASCADE, ON UPDATE CASCADE)']
+  qr_session_id int [not null, note: 'FK -> qr_sessions.id (ON DELETE CASCADE, ON UPDATE CASCADE)']
+  scanned_at datetime2 [not null, default: `getdate()`]
+  status nvarchar(10) [not null, default: 'present', note: 'CHECK (status IN (\'present\',\'late\',\'absent\'))']
+  // Один студент может отметиться на одной QR-сессии только один раз
+  indexes {
+    (user_id, qr_session_id) [unique, name: 'UQ_attendance_user_qr']
+  }
+}
+
+// ======================================
+// Связи (Foreign Keys) – для наглядности
+// ======================================
+Ref: users.role_id > roles.id
+Ref: users.group_id > groups.id [delete: set null, update: cascade]
+Ref: subjects.teacher_id > users.id [delete: set null, update: cascade]
+Ref: schedule.group_id > groups.id [delete: cascade, update: cascade]
+Ref: schedule.subject_id > subjects.id [delete: cascade, update: cascade]
+Ref: schedule.teacher_id > users.id [delete: set null, update: cascade]
+Ref: qr_sessions.schedule_id > schedule.id [delete: cascade, update: cascade]
+Ref: attendance.user_id > users.id [delete: cascade, update: cascade]
+Ref: attendance.qr_session_id > qr_sessions.id [delete: cascade, update: cascade]
