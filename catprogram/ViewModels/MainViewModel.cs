@@ -50,7 +50,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         _database.Initialize();
-        RefreshAll();
 
         LoginCommand = new RelayCommand(_ => Login(), _ => !_isLoggedIn);
         LogoutCommand = new RelayCommand(_ => Logout(), _ => _isLoggedIn);
@@ -71,6 +70,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ToggleQrStateCommand = new RelayCommand(_ => ToggleQrState(), _ => _isLoggedIn && _selectedQrSessionId is not null);
         ScanAttendanceCommand = new RelayCommand(_ => ScanAttendance(), _ => _isLoggedIn);
         SelectQrFromLatestCommand = new RelayCommand(_ => SelectLatestQr());
+
+        RefreshAll();
     }
 
     public ObservableCollection<RoleItem> Roles { get; private set; } = new();
