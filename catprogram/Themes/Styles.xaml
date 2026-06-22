@@ -41,7 +41,6 @@
 
     <Style TargetType="Thumb">
         <Setter Property="Background" Value="#395579" />
-        <Setter Property="CornerRadius" Value="6" />
     </Style>
 
     <Style TargetType="Border" x:Key="CardBorderStyle">
