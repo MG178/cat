@@ -7,24 +7,34 @@
       Background="Transparent">
     <Grid Margin="24">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240" />
-            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="18" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <Border Style="{StaticResource CardBorderStyle}">
-            <StackPanel>
-                <TextBlock Text="Навигация" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
-                <Button Content="Панель" Command="{Binding RefreshCommand}" Margin="0,0,0,8" />
-                <Button Content="Пользователи" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-                <Button Content="Группы" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-                <Button Content="Предметы" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-                <Button Content="Расписание" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-                <Button Content="QR" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-                <Button Content="Посещаемость" Style="{StaticResource GhostButtonStyle}" Margin="0,0,0,8" />
-            </StackPanel>
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,18">
+                    <TextBlock Text="Навигация" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding CurrentUserName}" FontSize="13" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding CurrentUserRole}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" />
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Button Content="Панель" Command="{Binding NavigateDashboardCommand}" Margin="0,0,0,8" />
+                        <Button Content="Пользователи" Command="{Binding NavigateUsersCommand}" Margin="0,0,0,8" Visibility="{Binding CanSeeAdminSections, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Группы" Command="{Binding NavigateGroupsCommand}" Margin="0,0,0,8" Visibility="{Binding CanSeeAdminSections, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Предметы" Command="{Binding NavigateSubjectsCommand}" Margin="0,0,0,8" Visibility="{Binding CanSeeAdminSections, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Расписание" Command="{Binding NavigateScheduleCommand}" Margin="0,0,0,8" />
+                        <Button Content="QR" Command="{Binding NavigateQrCommand}" Margin="0,0,0,8" />
+                        <Button Content="Посещаемость" Command="{Binding NavigateAttendanceCommand}" Margin="0,0,0,8" />
+                        <Button Content="Обновить всё" Command="{Binding RefreshCommand}" Style="{StaticResource GhostButtonStyle}" Margin="0,10,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
-        <Frame Grid.Column="2" NavigationUIVisibility="Hidden" Background="Transparent" />
+        <Frame Grid.Column="2" x:Name="SectionFrame" NavigationUIVisibility="Hidden" Background="Transparent" />
     </Grid>
 </Page>

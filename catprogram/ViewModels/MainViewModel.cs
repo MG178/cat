@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
 using catprogram.Models;
 using catprogram.Services;
 
@@ -12,70 +14,89 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private readonly LocalDatabaseService _database = new();
 
     private bool _isLoggedIn;
+    private UserItem? _currentUser;
     private string _loginEmail = "admin@collegehub.local";
     private string _loginPassword = "Admin123!";
     private string _statusMessage = "Готово к работе.";
+    private bool _isBusy;
+    private AppSection _currentSection = AppSection.Dashboard;
     private string _scanQrCode = string.Empty;
+    private string _latestQrCode = string.Empty;
+    private string _expiresMinutes = "30";
+
     private string _newUserName = string.Empty;
     private string _newUserEmail = string.Empty;
     private string _newUserPassword = string.Empty;
-    private string _newGroupName = string.Empty;
-    private string _newGroupDepartment = string.Empty;
-    private string _newSubjectName = string.Empty;
-    private string _newRoom = string.Empty;
-    private string _newStartTime = "08:30";
-    private string _newEndTime = "10:00";
-    private string _newDay = "Monday";
-    private string _newLessonType = "lecture";
-    private int _newGroupCourse = 1;
     private int _newUserRoleId = 3;
     private int? _newUserGroupId;
-    private int? _newSubjectTeacherId = 2;
-    private int _newScheduleGroupId = 1;
-    private int _newScheduleSubjectId = 1;
-    private int? _newScheduleTeacherId = 2;
-    private int? _selectedUserId;
-    private int? _selectedGroupId;
-    private int? _selectedSubjectId;
-    private int? _selectedScheduleId;
-    private int? _selectedQrSessionId;
-    private UserItem? _currentUser;
-    private QrSessionItem? _selectedSessionToGenerateFrom;
-    private bool _isBusy;
-    private string _latestQrCode = string.Empty;
-    private string _expiresMinutes = "30";
-    private string _currentPage = "Login";
 
-    public event Action? LoginSucceeded;
-    public event Action? LogoutRequested;
+    private string _newGroupName = string.Empty;
+    private int _newGroupCourse = 1;
+    private string _newGroupDepartment = string.Empty;
+
+    private string _newSubjectName = string.Empty;
+    private int? _newSubjectTeacherId = 2;
+
+    private int? _newScheduleGroupId = 1;
+    private int? _newScheduleSubjectId = 1;
+    private int? _newScheduleTeacherId = 2;
+    private string _newScheduleRoom = string.Empty;
+    private string _newScheduleStartTime = "08:30";
+    private string _newScheduleEndTime = "10:00";
+    private string _newScheduleDay = "Monday";
+    private string _newScheduleLessonType = "lecture";
+
+    private UserItem? _selectedUser;
+    private GroupItem? _selectedGroup;
+    private SubjectItem? _selectedSubject;
+    private ScheduleItem? _selectedSchedule;
+    private QrSessionItem? _selectedQrSession;
+    private ImageSource? _qrPreview;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public event Action? LoginSucceeded;
+    public event Action? LogoutRequested;
 
     public MainViewModel()
     {
         _database.Initialize();
 
-        LoginCommand = new RelayCommand(_ => Login(), _ => !_isLoggedIn);
-        LogoutCommand = new RelayCommand(_ => Logout(), _ => _isLoggedIn);
-        RefreshCommand = new RelayCommand(_ => RefreshAll());
-        CreateUserCommand = new RelayCommand(_ => CreateUser(), _ => _isLoggedIn);
-        UpdateUserCommand = new RelayCommand(_ => UpdateUser(), _ => _isLoggedIn && _selectedUserId is not null);
-        DeleteUserCommand = new RelayCommand(_ => DeleteUser(), _ => _isLoggedIn && _selectedUserId is not null);
-        CreateGroupCommand = new RelayCommand(_ => CreateGroup(), _ => _isLoggedIn);
-        UpdateGroupCommand = new RelayCommand(_ => UpdateGroup(), _ => _isLoggedIn && _selectedGroupId is not null);
-        DeleteGroupCommand = new RelayCommand(_ => DeleteGroup(), _ => _isLoggedIn && _selectedGroupId is not null);
-        CreateSubjectCommand = new RelayCommand(_ => CreateSubject(), _ => _isLoggedIn);
-        UpdateSubjectCommand = new RelayCommand(_ => UpdateSubject(), _ => _isLoggedIn && _selectedSubjectId is not null);
-        DeleteSubjectCommand = new RelayCommand(_ => DeleteSubject(), _ => _isLoggedIn && _selectedSubjectId is not null);
-        CreateScheduleCommand = new RelayCommand(_ => CreateSchedule(), _ => _isLoggedIn);
-        UpdateScheduleCommand = new RelayCommand(_ => UpdateSchedule(), _ => _isLoggedIn && _selectedScheduleId is not null);
-        DeleteScheduleCommand = new RelayCommand(_ => DeleteSchedule(), _ => _isLoggedIn && _selectedScheduleId is not null);
-        GenerateQrCommand = new RelayCommand(_ => GenerateQr(), _ => _isLoggedIn && _selectedScheduleId is not null);
-        ToggleQrStateCommand = new RelayCommand(_ => ToggleQrState(), _ => _isLoggedIn && _selectedQrSessionId is not null);
-        ScanAttendanceCommand = new RelayCommand(_ => ScanAttendance(), _ => _isLoggedIn);
-        SelectQrFromLatestCommand = new RelayCommand(_ => SelectLatestQr());
+        LoginCommand = new RelayCommand(_ => Login(), _ => !IsLoggedIn);
+        LogoutCommand = new RelayCommand(_ => Logout(), _ => IsLoggedIn);
+        RefreshCommand = new RelayCommand(_ => RefreshAll(), _ => IsLoggedIn);
+        NavigateDashboardCommand = new RelayCommand(_ => CurrentSection = AppSection.Dashboard, _ => IsLoggedIn);
+        NavigateUsersCommand = new RelayCommand(_ => CurrentSection = AppSection.Users, _ => IsLoggedIn && IsAdmin);
+        NavigateGroupsCommand = new RelayCommand(_ => CurrentSection = AppSection.Groups, _ => IsLoggedIn && IsAdmin);
+        NavigateSubjectsCommand = new RelayCommand(_ => CurrentSection = AppSection.Subjects, _ => IsLoggedIn && IsAdmin);
+        NavigateScheduleCommand = new RelayCommand(_ => CurrentSection = AppSection.Schedule, _ => IsLoggedIn && (IsAdmin || IsTeacher));
+        NavigateQrCommand = new RelayCommand(_ => CurrentSection = AppSection.Qr, _ => IsLoggedIn && (IsAdmin || IsTeacher));
+        NavigateAttendanceCommand = new RelayCommand(_ => CurrentSection = AppSection.Attendance, _ => IsLoggedIn);
+
+        CreateUserCommand = new RelayCommand(_ => CreateUser(), _ => IsLoggedIn && IsAdmin);
+        UpdateUserCommand = new RelayCommand(_ => UpdateUser(), _ => IsLoggedIn && IsAdmin && SelectedUser is not null);
+        DeleteUserCommand = new RelayCommand(_ => DeleteUser(), _ => IsLoggedIn && IsAdmin && SelectedUser is not null);
+
+        CreateGroupCommand = new RelayCommand(_ => CreateGroup(), _ => IsLoggedIn && IsAdmin);
+        UpdateGroupCommand = new RelayCommand(_ => UpdateGroup(), _ => IsLoggedIn && IsAdmin && SelectedGroup is not null);
+        DeleteGroupCommand = new RelayCommand(_ => DeleteGroup(), _ => IsLoggedIn && IsAdmin && SelectedGroup is not null);
+
+        CreateSubjectCommand = new RelayCommand(_ => CreateSubject(), _ => IsLoggedIn && IsAdmin);
+        UpdateSubjectCommand = new RelayCommand(_ => UpdateSubject(), _ => IsLoggedIn && IsAdmin && SelectedSubject is not null);
+        DeleteSubjectCommand = new RelayCommand(_ => DeleteSubject(), _ => IsLoggedIn && IsAdmin && SelectedSubject is not null);
+
+        CreateScheduleCommand = new RelayCommand(_ => CreateSchedule(), _ => IsLoggedIn && (IsAdmin || IsTeacher));
+        UpdateScheduleCommand = new RelayCommand(_ => UpdateSchedule(), _ => IsLoggedIn && (IsAdmin || IsTeacher) && SelectedSchedule is not null);
+        DeleteScheduleCommand = new RelayCommand(_ => DeleteSchedule(), _ => IsLoggedIn && (IsAdmin || IsTeacher) && SelectedSchedule is not null);
+
+        GenerateQrCommand = new RelayCommand(_ => GenerateQr(), _ => IsLoggedIn && (IsAdmin || IsTeacher) && SelectedSchedule is not null);
+        ToggleQrStateCommand = new RelayCommand(_ => ToggleQrState(), _ => IsLoggedIn && (IsAdmin || IsTeacher) && SelectedQrSession is not null);
+        ScanAttendanceCommand = new RelayCommand(_ => ScanAttendance(), _ => IsLoggedIn && !string.IsNullOrWhiteSpace(ScanQrCode));
+        CopyLatestQrCommand = new RelayCommand(_ => CopyLatestQr(), _ => !string.IsNullOrWhiteSpace(LatestQrCode));
 
         RefreshAll();
+        CurrentSection = AppSection.Dashboard;
+        IsLoggedIn = false;
+        CurrentUser = null;
     }
 
     public ObservableCollection<RoleItem> Roles { get; private set; } = new();
@@ -91,9 +112,21 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool IsLoggedIn
     {
         get => _isLoggedIn;
-        set => SetField(ref _isLoggedIn, value);
+        set
+        {
+            if (SetField(ref _isLoggedIn, value))
+            {
+                OnPropertyChanged(nameof(IsAuthenticated));
+                OnPropertyChanged(nameof(IsAdmin));
+                OnPropertyChanged(nameof(IsTeacher));
+                OnPropertyChanged(nameof(IsStudent));
+                OnPropertyChanged(nameof(CanSeeAdminSections));
+                RaiseCommandStates();
+            }
+        }
     }
 
+    public bool IsAuthenticated => CurrentUser is not null;
     public UserItem? CurrentUser
     {
         get => _currentUser;
@@ -101,18 +134,24 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             if (SetField(ref _currentUser, value))
             {
-                OnPropertyChanged(nameof(IsAdmin));
-                OnPropertyChanged(nameof(IsStudent));
                 OnPropertyChanged(nameof(IsAuthenticated));
+                OnPropertyChanged(nameof(IsAdmin));
+                OnPropertyChanged(nameof(IsTeacher));
+                OnPropertyChanged(nameof(IsStudent));
+                OnPropertyChanged(nameof(CanSeeAdminSections));
+                OnPropertyChanged(nameof(CurrentUserName));
+                OnPropertyChanged(nameof(CurrentUserRole));
+                RaiseCommandStates();
             }
         }
     }
 
-    public bool IsAuthenticated => _currentUser is not null;
-
+    public string CurrentUserName => CurrentUser?.FullName ?? "Гость";
+    public string CurrentUserRole => CurrentUser?.RoleName ?? "—";
     public bool IsAdmin => string.Equals(CurrentUser?.RoleName, "admin", StringComparison.OrdinalIgnoreCase);
-
+    public bool IsTeacher => string.Equals(CurrentUser?.RoleName, "teacher", StringComparison.OrdinalIgnoreCase);
     public bool IsStudent => string.Equals(CurrentUser?.RoleName, "student", StringComparison.OrdinalIgnoreCase);
+    public bool CanSeeAdminSections => IsLoggedIn && IsAdmin;
 
     public string LoginEmail
     {
@@ -130,6 +169,18 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _statusMessage;
         set => SetField(ref _statusMessage, value);
+    }
+
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set => SetField(ref _isBusy, value);
+    }
+
+    public AppSection CurrentSection
+    {
+        get => _currentSection;
+        set => SetField(ref _currentSection, value);
     }
 
     public string ScanQrCode
@@ -150,172 +201,114 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => SetField(ref _expiresMinutes, value);
     }
 
-    public string NewUserName
+    public ImageSource? QrPreview
     {
-        get => _newUserName;
-        set => SetField(ref _newUserName, value);
+        get => _qrPreview;
+        set => SetField(ref _qrPreview, value);
     }
 
-    public string NewUserEmail
-    {
-        get => _newUserEmail;
-        set => SetField(ref _newUserEmail, value);
-    }
+    public string NewUserName { get => _newUserName; set => SetField(ref _newUserName, value); }
+    public string NewUserEmail { get => _newUserEmail; set => SetField(ref _newUserEmail, value); }
+    public string NewUserPassword { get => _newUserPassword; set => SetField(ref _newUserPassword, value); }
+    public int NewUserRoleId { get => _newUserRoleId; set => SetField(ref _newUserRoleId, value); }
+    public int? NewUserGroupId { get => _newUserGroupId; set => SetField(ref _newUserGroupId, value); }
 
-    public string NewUserPassword
-    {
-        get => _newUserPassword;
-        set => SetField(ref _newUserPassword, value);
-    }
+    public string NewGroupName { get => _newGroupName; set => SetField(ref _newGroupName, value); }
+    public int NewGroupCourse { get => _newGroupCourse; set => SetField(ref _newGroupCourse, value); }
+    public string NewGroupDepartment { get => _newGroupDepartment; set => SetField(ref _newGroupDepartment, value); }
 
-    public int NewUserRoleId
-    {
-        get => _newUserRoleId;
-        set => SetField(ref _newUserRoleId, value);
-    }
+    public string NewSubjectName { get => _newSubjectName; set => SetField(ref _newSubjectName, value); }
+    public int? NewSubjectTeacherId { get => _newSubjectTeacherId; set => SetField(ref _newSubjectTeacherId, value); }
 
-    public int? NewUserGroupId
-    {
-        get => _newUserGroupId;
-        set => SetField(ref _newUserGroupId, value);
-    }
+    public int? NewScheduleGroupId { get => _newScheduleGroupId; set => SetField(ref _newScheduleGroupId, value); }
+    public int? NewScheduleSubjectId { get => _newScheduleSubjectId; set => SetField(ref _newScheduleSubjectId, value); }
+    public int? NewScheduleTeacherId { get => _newScheduleTeacherId; set => SetField(ref _newScheduleTeacherId, value); }
+    public string NewScheduleRoom { get => _newScheduleRoom; set => SetField(ref _newScheduleRoom, value); }
+    public string NewScheduleStartTime { get => _newScheduleStartTime; set => SetField(ref _newScheduleStartTime, value); }
+    public string NewScheduleEndTime { get => _newScheduleEndTime; set => SetField(ref _newScheduleEndTime, value); }
+    public string NewScheduleDay { get => _newScheduleDay; set => SetField(ref _newScheduleDay, value); }
+    public string NewScheduleLessonType { get => _newScheduleLessonType; set => SetField(ref _newScheduleLessonType, value); }
 
-    public string NewGroupName
+    public UserItem? SelectedUser
     {
-        get => _newGroupName;
-        set => SetField(ref _newGroupName, value);
-    }
-
-    public int NewGroupCourse
-    {
-        get => _newGroupCourse;
-        set => SetField(ref _newGroupCourse, value);
-    }
-
-    public string NewGroupDepartment
-    {
-        get => _newGroupDepartment;
-        set => SetField(ref _newGroupDepartment, value);
-    }
-
-    public string NewSubjectName
-    {
-        get => _newSubjectName;
-        set => SetField(ref _newSubjectName, value);
-    }
-
-                        OnPropertyChanged(nameof(IsTeacher));
-    public int? NewSubjectTeacherId
-    {
-                        OnPropertyChanged(nameof(ShowAdminSections));
-                        OnPropertyChanged(nameof(ShowStudentSections));
-        get => _newSubjectTeacherId;
-        set => SetField(ref _newSubjectTeacherId, value);
-    }
-
-    public int NewScheduleGroupId
-    {
-        get => _newScheduleGroupId;
-        set => SetField(ref _newScheduleGroupId, value);
-            public bool IsTeacher => string.Equals(CurrentUser?.RoleName, "teacher", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public int NewScheduleSubjectId
-            public bool ShowAdminSections => IsLoggedIn && IsAdmin;
-    
-            public bool ShowStudentSections => IsLoggedIn && (IsStudent || IsTeacher || IsAdmin);
-    {
-        get => _newScheduleSubjectId;
-        set => SetField(ref _newScheduleSubjectId, value);
-    }
-
-    public int? NewScheduleTeacherId
-    {
-            public string CurrentPage
+        get => _selectedUser;
+        set
+        {
+            if (SetField(ref _selectedUser, value) && value is not null)
             {
-                get => _currentPage;
-                set => SetField(ref _currentPage, value);
+                NewUserName = value.FullName;
+                NewUserEmail = value.Email;
+                NewUserPassword = string.Empty;
+                NewUserRoleId = value.RoleId;
+                NewUserGroupId = value.GroupId;
             }
-        get => _newScheduleTeacherId;
-        set => SetField(ref _newScheduleTeacherId, value);
+        }
     }
-
-    public string NewRoom
+    public GroupItem? SelectedGroup
     {
-        get => _newRoom;
-        set => SetField(ref _newRoom, value);
+        get => _selectedGroup;
+        set
+        {
+            if (SetField(ref _selectedGroup, value) && value is not null)
+            {
+                NewGroupName = value.Name;
+                NewGroupCourse = value.Course;
+                NewGroupDepartment = value.Department;
+            }
+        }
     }
-
-    public string NewStartTime
+    public SubjectItem? SelectedSubject
     {
-        get => _newStartTime;
-        set => SetField(ref _newStartTime, value);
+        get => _selectedSubject;
+        set
+        {
+            if (SetField(ref _selectedSubject, value) && value is not null)
+            {
+                NewSubjectName = value.Name;
+                NewSubjectTeacherId = value.TeacherId;
+            }
+        }
     }
-
-    public string NewEndTime
+    public ScheduleItem? SelectedSchedule
     {
-        get => _newEndTime;
-        set => SetField(ref _newEndTime, value);
+        get => _selectedSchedule;
+        set
+        {
+            if (SetField(ref _selectedSchedule, value) && value is not null)
+            {
+                NewScheduleGroupId = value.GroupId;
+                NewScheduleSubjectId = value.SubjectId;
+                NewScheduleTeacherId = value.TeacherId;
+                NewScheduleRoom = value.Room;
+                NewScheduleStartTime = value.StartTime;
+                NewScheduleEndTime = value.EndTime;
+                NewScheduleDay = value.DayOfWeek;
+                NewScheduleLessonType = value.LessonType;
+            }
+        }
     }
-
-    public string NewDay
+    public QrSessionItem? SelectedQrSession
     {
-        get => _newDay;
-        set => SetField(ref _newDay, value);
-    }
-
-    public string NewLessonType
-    {
-        get => _newLessonType;
-        set => SetField(ref _newLessonType, value);
-    }
-
-    public int? SelectedUserId
-    {
-        get => _selectedUserId;
-        set => SetField(ref _selectedUserId, value);
-    }
-
-    public int? SelectedGroupId
-    {
-        get => _selectedGroupId;
-        set => SetField(ref _selectedGroupId, value);
-    }
-
-    public int? SelectedSubjectId
-    {
-        get => _selectedSubjectId;
-        set => SetField(ref _selectedSubjectId, value);
-    }
-
-    public int? SelectedScheduleId
-    {
-        get => _selectedScheduleId;
-        set => SetField(ref _selectedScheduleId, value);
-    }
-
-    public int? SelectedQrSessionId
-    {
-        get => _selectedQrSessionId;
-        set => SetField(ref _selectedQrSessionId, value);
-    }
-
-    public QrSessionItem? SelectedSessionToGenerateFrom
-    {
-        get => _selectedSessionToGenerateFrom;
-        set => SetField(ref _selectedSessionToGenerateFrom, value);
-    }
-
-                        CurrentPage = "Shell";
-    public bool IsBusy
-    {
-        get => _isBusy;
-        set => SetField(ref _isBusy, value);
+        get => _selectedQrSession;
+        set
+        {
+            if (SetField(ref _selectedQrSession, value) && value is not null)
+            {
+                ScanQrCode = value.QrCodeData;
+            }
+        }
     }
 
     public RelayCommand LoginCommand { get; }
     public RelayCommand LogoutCommand { get; }
     public RelayCommand RefreshCommand { get; }
+    public RelayCommand NavigateDashboardCommand { get; }
+    public RelayCommand NavigateUsersCommand { get; }
+    public RelayCommand NavigateGroupsCommand { get; }
+    public RelayCommand NavigateSubjectsCommand { get; }
+    public RelayCommand NavigateScheduleCommand { get; }
+    public RelayCommand NavigateQrCommand { get; }
+    public RelayCommand NavigateAttendanceCommand { get; }
     public RelayCommand CreateUserCommand { get; }
     public RelayCommand UpdateUserCommand { get; }
     public RelayCommand DeleteUserCommand { get; }
@@ -330,9 +323,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand DeleteScheduleCommand { get; }
     public RelayCommand GenerateQrCommand { get; }
     public RelayCommand ToggleQrStateCommand { get; }
-                CurrentPage = "Login";
     public RelayCommand ScanAttendanceCommand { get; }
-    public RelayCommand SelectQrFromLatestCommand { get; }
+    public RelayCommand CopyLatestQrCommand { get; }
 
     public void RefreshAll()
     {
@@ -344,56 +336,47 @@ public sealed class MainViewModel : INotifyPropertyChanged
         QrSessions = _database.GetQrSessions();
         Attendance = _database.GetAttendance();
         Dashboard = _database.GetDashboardSnapshot();
+
+        if (NewUserGroupId is null && Groups.Count > 0)
+        {
+            NewUserGroupId = Groups[0].Id;
+        }
+
+        if (NewSubjectTeacherId is null && Users.Count > 0)
+        {
+            NewSubjectTeacherId = Users.FirstOrDefault(u => IsTeacherRole(u.RoleName))?.Id ?? Users[0].Id;
+        }
+
+        if (NewScheduleGroupId is null && Groups.Count > 0)
+        {
+            NewScheduleGroupId = Groups[0].Id;
+        }
+
+        if (NewScheduleSubjectId is null && Subjects.Count > 0)
+        {
+            NewScheduleSubjectId = Subjects[0].Id;
+        }
+
+        if (NewScheduleTeacherId is null && Users.Count > 0)
+        {
+            NewScheduleTeacherId = Users.FirstOrDefault(u => IsTeacherRole(u.RoleName))?.Id;
+        }
+
         LatestQrCode = _database.GetLatestQrCode();
+        QrPreview = string.IsNullOrWhiteSpace(LatestQrCode) ? null : QrCodeRenderer.Render(LatestQrCode);
 
-        if (_newUserGroupId is null && Groups.Count > 0)
-        {
-            _newUserGroupId = Groups[0].Id;
-        }
-                OnPropertyChanged(nameof(CurrentPage));
-                OnPropertyChanged(nameof(IsAdmin));
-                OnPropertyChanged(nameof(IsTeacher));
-                OnPropertyChanged(nameof(IsStudent));
-                OnPropertyChanged(nameof(ShowAdminSections));
-                OnPropertyChanged(nameof(ShowStudentSections));
-
-        if (_newSubjectTeacherId is null && Users.Count > 0)
-        {
-            _newSubjectTeacherId = Users.FirstOrDefault(user => user.RoleName == "teacher")?.Id;
-        }
-
-        if (_newScheduleGroupId == 0 && Groups.Count > 0)
-        {
-            _newScheduleGroupId = Groups[0].Id;
-        }
-
-        if (_newScheduleSubjectId == 0 && Subjects.Count > 0)
-        {
-            _newScheduleSubjectId = Subjects[0].Id;
-        }
-
-        if (_newScheduleTeacherId is null)
-        {
-            _newScheduleTeacherId = Users.FirstOrDefault(user => user.RoleName == "teacher")?.Id;
-        }
-
-        if (_selectedScheduleId is null && Schedules.Count > 0)
-        {
-            _selectedScheduleId = Schedules[0].Id;
-        }
-
-        if (_selectedQrSessionId is null && QrSessions.Count > 0)
-        {
-            _selectedQrSessionId = QrSessions[0].Id;
-        }
-
-        if (CurrentUser is not null)
-        {
-            SelectedUserId ??= CurrentUser.Id;
-        }
-
-        RaiseAllPropertyChanged();
-        RaiseCanExecuteChanged();
+        OnPropertyChanged(nameof(Roles));
+        OnPropertyChanged(nameof(Groups));
+        OnPropertyChanged(nameof(Users));
+        OnPropertyChanged(nameof(Subjects));
+        OnPropertyChanged(nameof(Schedules));
+        OnPropertyChanged(nameof(QrSessions));
+        OnPropertyChanged(nameof(Attendance));
+        OnPropertyChanged(nameof(Dashboard));
+        OnPropertyChanged(nameof(LatestQrCode));
+        OnPropertyChanged(nameof(QrPreview));
+        OnPropertyChanged(nameof(CanSeeAdminSections));
+        RaiseCommandStates();
     }
 
     private void Login()
@@ -404,252 +387,298 @@ public sealed class MainViewModel : INotifyPropertyChanged
             {
                 CurrentUser = user;
                 IsLoggedIn = true;
-                StatusMessage = $"Вход выполнен: {user.FullName}.";
-                SelectedUserId = user.Id;
+                CurrentSection = AppSection.Dashboard;
+                StatusMessage = $"Вход выполнен: {user.FullName} ({user.RoleName})";
                 RefreshAll();
                 LoginSucceeded?.Invoke();
-                MessageBox.Show($"Добро пожаловать, {user.FullName}!", "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
-            else
-            {
-                StatusMessage = "Неверные учетные данные.";
-                MessageBox.Show("Проверьте email и пароль.", "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+
+            StatusMessage = "Неверный email или пароль.";
         }
         catch (Exception ex)
         {
-            StatusMessage = ex.Message;
-            MessageBox.Show(ex.Message, "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Error);
+            StatusMessage = $"Ошибка входа: {ex.Message}";
         }
     }
 
     private void Logout()
     {
-        IsLoggedIn = false;
         CurrentUser = null;
-        StatusMessage = "Сеанс завершен.";
-        RaiseCanExecuteChanged();
+        IsLoggedIn = false;
+        CurrentSection = AppSection.Dashboard;
+        ScanQrCode = string.Empty;
+        StatusMessage = "Вы вышли из системы.";
         LogoutRequested?.Invoke();
     }
 
     private void CreateUser()
     {
-        try
+        if (!RequireAdmin()) return;
+        TryAction("Пользователь создан", () =>
         {
-            _database.CreateUser(NewUserName, NewUserEmail, NewUserPassword, NewUserRoleId, NewUserRoleId == 3 ? NewUserGroupId : null);
-            StatusMessage = "Пользователь создан.";
-            RefreshAll();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+            _database.CreateUser(NewUserName, NewUserEmail, NewUserPassword, NewUserRoleId, NormalizeStudentGroup(NewUserRoleId, NewUserGroupId));
+            ClearUserForm();
+        });
     }
 
     private void UpdateUser()
     {
-        if (SelectedUserId is null)
+        if (!RequireAdmin() || SelectedUser is null) return;
+        TryAction("Пользователь обновлён", () =>
         {
-            return;
-        }
-
-        try
-        {
-            _database.UpdateUser(SelectedUserId.Value, NewUserName, NewUserEmail, string.IsNullOrWhiteSpace(NewUserPassword) ? null : NewUserPassword, NewUserRoleId, NewUserRoleId == 3 ? NewUserGroupId : null);
-            StatusMessage = "Пользователь обновлен.";
-            RefreshAll();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+            _database.UpdateUser(SelectedUser.Id, NewUserNameOrSelected(), NewUserEmailOrSelected(), string.IsNullOrWhiteSpace(NewUserPassword) ? null : NewUserPassword, NewUserRoleIdOrSelected(), NormalizeStudentGroup(NewUserRoleIdOrSelected(), NewUserGroupId));
+            ClearUserForm();
+        });
     }
 
     private void DeleteUser()
     {
-        if (SelectedUserId is null)
+        if (!RequireAdmin() || SelectedUser is null) return;
+        TryAction("Пользователь удалён", () =>
         {
-            return;
-        }
-
-        _database.DeleteUser(SelectedUserId.Value);
-        StatusMessage = "Пользователь удален.";
-        RefreshAll();
+            _database.DeleteUser(SelectedUser.Id);
+            SelectedUser = null;
+            ClearUserForm();
+        });
     }
 
     private void CreateGroup()
     {
-        try
+        if (!RequireAdmin()) return;
+        TryAction("Группа создана", () =>
         {
             _database.CreateGroup(NewGroupName, NewGroupCourse, NewGroupDepartment);
-            StatusMessage = "Группа создана.";
-            RefreshAll();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(ex.Message, "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+            ClearGroupForm();
+        });
     }
 
     private void UpdateGroup()
     {
-        if (SelectedGroupId is null)
+        if (!RequireAdmin() || SelectedGroup is null) return;
+        TryAction("Группа обновлена", () =>
         {
-            return;
-        }
-
-        _database.UpdateGroup(SelectedGroupId.Value, NewGroupName, NewGroupCourse, NewGroupDepartment);
-        StatusMessage = "Группа обновлена.";
-        RefreshAll();
+            _database.UpdateGroup(SelectedGroup.Id, string.IsNullOrWhiteSpace(NewGroupName) ? SelectedGroup.Name : NewGroupName, NewGroupCourse == 0 ? SelectedGroup.Course : NewGroupCourse, string.IsNullOrWhiteSpace(NewGroupDepartment) ? SelectedGroup.Department : NewGroupDepartment);
+            ClearGroupForm();
+        });
     }
 
     private void DeleteGroup()
     {
-        if (SelectedGroupId is null)
+        if (!RequireAdmin() || SelectedGroup is null) return;
+        TryAction("Группа удалена", () =>
         {
-            return;
-        }
-
-        _database.DeleteGroup(SelectedGroupId.Value);
-        StatusMessage = "Группа удалена.";
-        RefreshAll();
+            _database.DeleteGroup(SelectedGroup.Id);
+            SelectedGroup = null;
+            ClearGroupForm();
+        });
     }
 
     private void CreateSubject()
     {
-        _database.CreateSubject(NewSubjectName, NewSubjectTeacherId);
-        StatusMessage = "Предмет создан.";
-        RefreshAll();
+        if (!RequireAdmin()) return;
+        TryAction("Предмет создан", () =>
+        {
+            _database.CreateSubject(NewSubjectName, NewSubjectTeacherId);
+            ClearSubjectForm();
+        });
     }
 
     private void UpdateSubject()
     {
-        if (SelectedSubjectId is null)
+        if (!RequireAdmin() || SelectedSubject is null) return;
+        TryAction("Предмет обновлён", () =>
         {
-            return;
-        }
-
-        _database.UpdateSubject(SelectedSubjectId.Value, NewSubjectName, NewSubjectTeacherId);
-        StatusMessage = "Предмет обновлен.";
-        RefreshAll();
+            _database.UpdateSubject(SelectedSubject.Id, string.IsNullOrWhiteSpace(NewSubjectName) ? SelectedSubject.Name : NewSubjectName, NewSubjectTeacherId);
+            ClearSubjectForm();
+        });
     }
 
     private void DeleteSubject()
     {
-        if (SelectedSubjectId is null)
+        if (!RequireAdmin() || SelectedSubject is null) return;
+        TryAction("Предмет удалён", () =>
         {
-            return;
-        }
-
-        _database.DeleteSubject(SelectedSubjectId.Value);
-        StatusMessage = "Предмет удален.";
-        RefreshAll();
+            _database.DeleteSubject(SelectedSubject.Id);
+            SelectedSubject = null;
+            ClearSubjectForm();
+        });
     }
 
     private void CreateSchedule()
     {
-        _database.CreateSchedule(NewScheduleGroupId, NewScheduleSubjectId, NewScheduleTeacherId, NewRoom, NewStartTime, NewEndTime, NewDay, NewLessonType);
-        StatusMessage = "Занятие добавлено.";
-        RefreshAll();
+        if (!RequireScheduleAccess()) return;
+        TryAction("Расписание создано", () =>
+        {
+            _database.CreateSchedule(RequireValue(NewScheduleGroupId), RequireValue(NewScheduleSubjectId), NewScheduleTeacherId, NewScheduleRoom, NewScheduleStartTime, NewScheduleEndTime, NewScheduleDay, NewScheduleLessonType);
+            ClearScheduleForm();
+        });
     }
 
     private void UpdateSchedule()
     {
-        if (SelectedScheduleId is null)
+        if (!RequireScheduleAccess() || SelectedSchedule is null) return;
+        TryAction("Расписание обновлено", () =>
         {
-            return;
-        }
-
-        _database.UpdateSchedule(SelectedScheduleId.Value, NewScheduleGroupId, NewScheduleSubjectId, NewScheduleTeacherId, NewRoom, NewStartTime, NewEndTime, NewDay, NewLessonType);
-        StatusMessage = "Занятие обновлено.";
-        RefreshAll();
+            _database.UpdateSchedule(SelectedSchedule.Id, NewScheduleGroupId ?? SelectedSchedule.GroupId, NewScheduleSubjectId ?? SelectedSchedule.SubjectId, NewScheduleTeacherId, string.IsNullOrWhiteSpace(NewScheduleRoom) ? SelectedSchedule.Room : NewScheduleRoom, string.IsNullOrWhiteSpace(NewScheduleStartTime) ? SelectedSchedule.StartTime : NewScheduleStartTime, string.IsNullOrWhiteSpace(NewScheduleEndTime) ? SelectedSchedule.EndTime : NewScheduleEndTime, string.IsNullOrWhiteSpace(NewScheduleDay) ? SelectedSchedule.DayOfWeek : NewScheduleDay, string.IsNullOrWhiteSpace(NewScheduleLessonType) ? SelectedSchedule.LessonType : NewScheduleLessonType);
+            ClearScheduleForm();
+        });
     }
 
     private void DeleteSchedule()
     {
-        if (SelectedScheduleId is null)
+        if (!RequireScheduleAccess() || SelectedSchedule is null) return;
+        TryAction("Расписание удалено", () =>
         {
-            return;
-        }
-
-        _database.DeleteSchedule(SelectedScheduleId.Value);
-        StatusMessage = "Занятие удалено.";
-        RefreshAll();
+            _database.DeleteSchedule(SelectedSchedule.Id);
+            SelectedSchedule = null;
+            ClearScheduleForm();
+        });
     }
 
     private void GenerateQr()
     {
-        if (SelectedScheduleId is null)
+        if (!RequireScheduleAccess() || SelectedSchedule is null) return;
+        TryAction("QR-сессия создана", () =>
         {
-            return;
-        }
-
-        if (!int.TryParse(ExpiresMinutes, out int expiresMinutes))
-        {
-            expiresMinutes = 30;
-        }
-
-        QrSessionItem session = _database.GenerateQrSession(SelectedScheduleId.Value, expiresMinutes);
-        LatestQrCode = session.QrCodeData;
-        StatusMessage = "QR-сессия сгенерирована.";
-        RefreshAll();
+            int expires = int.TryParse(ExpiresMinutes, out int minutes) ? minutes : 30;
+            QrSessionItem session = _database.GenerateQrSession(SelectedSchedule.Id, expires);
+            LatestQrCode = session.QrCodeData;
+            QrPreview = QrCodeRenderer.Render(session.QrCodeData);
+            ScanQrCode = session.QrCodeData;
+            SelectedQrSession = session;
+            StatusMessage = $"QR-сессия создана до {session.ExpiresAt:HH:mm}.";
+        }, refresh: true);
     }
 
     private void ToggleQrState()
     {
-        if (SelectedQrSessionId is null)
+        if (!RequireScheduleAccess() || SelectedQrSession is null) return;
+        TryAction("Состояние QR изменено", () =>
         {
-            return;
-        }
-
-        QrSessionItem session = QrSessions.FirstOrDefault(x => x.Id == SelectedQrSessionId.Value)!;
-        _database.SetQrSessionState(SelectedQrSessionId.Value, !session.IsActive);
-        StatusMessage = "Состояние QR-сессии изменено.";
-        RefreshAll();
+            _database.SetQrSessionState(SelectedQrSession.Id, !SelectedQrSession.IsActive);
+        });
     }
 
     private void ScanAttendance()
     {
-        if (CurrentUser is null)
+        if (CurrentUser is null) return;
+        TryAction("Посещение отмечено", () =>
         {
-            return;
-        }
-
-        string qrCode = string.IsNullOrWhiteSpace(ScanQrCode) ? LatestQrCode : ScanQrCode.Trim();
-        AttendanceScanResult result = _database.ScanAttendance(qrCode, CurrentUser.Id);
-        StatusMessage = result.Message;
-        MessageBox.Show(result.Message, "CollegeHub", MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-        RefreshAll();
+            AttendanceScanResult result = _database.ScanAttendance(ScanQrCode, CurrentUser.Id);
+            StatusMessage = result.Message;
+        }, refresh: true);
     }
 
-    private void SelectLatestQr()
+    private void CopyLatestQr()
     {
-        if (QrSessions.Count > 0)
+        if (string.IsNullOrWhiteSpace(LatestQrCode)) return;
+        try
         {
-            SelectedQrSessionId = QrSessions[0].Id;
+            Clipboard.SetText(LatestQrCode);
+            StatusMessage = "QR-код скопирован в буфер обмена.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Не удалось скопировать QR: {ex.Message}";
         }
     }
 
-    private void RaiseAllPropertyChanged()
+    private void ClearUserForm()
     {
-        OnPropertyChanged(nameof(Roles));
-        OnPropertyChanged(nameof(Groups));
-        OnPropertyChanged(nameof(Users));
-        OnPropertyChanged(nameof(Subjects));
-        OnPropertyChanged(nameof(Schedules));
-        OnPropertyChanged(nameof(QrSessions));
-        OnPropertyChanged(nameof(Attendance));
-        OnPropertyChanged(nameof(Dashboard));
-        OnPropertyChanged(nameof(CurrentUser));
-        OnPropertyChanged(nameof(IsLoggedIn));
-        OnPropertyChanged(nameof(StatusMessage));
-        OnPropertyChanged(nameof(LatestQrCode));
+        NewUserName = string.Empty;
+        NewUserEmail = string.Empty;
+        NewUserPassword = string.Empty;
+        if (Roles.Count > 0) NewUserRoleId = Roles.Last().Id;
+        if (Groups.Count > 0) NewUserGroupId = Groups[0].Id;
     }
 
-    private void RaiseCanExecuteChanged()
+    private void ClearGroupForm()
+    {
+        NewGroupName = string.Empty;
+        NewGroupCourse = 1;
+        NewGroupDepartment = string.Empty;
+    }
+
+    private void ClearSubjectForm()
+    {
+        NewSubjectName = string.Empty;
+        NewSubjectTeacherId = Users.FirstOrDefault(u => IsTeacherRole(u.RoleName))?.Id ?? Users.FirstOrDefault()?.Id;
+    }
+
+    private void ClearScheduleForm()
+    {
+        NewScheduleRoom = string.Empty;
+        NewScheduleStartTime = "08:30";
+        NewScheduleEndTime = "10:00";
+        NewScheduleDay = "Monday";
+        NewScheduleLessonType = "lecture";
+    }
+
+    private bool RequireAdmin()
+    {
+        if (!IsAdmin)
+        {
+            StatusMessage = "Для этого действия нужны права администратора.";
+            return false;
+        }
+        return true;
+    }
+
+    private bool RequireScheduleAccess()
+    {
+        if (!(IsAdmin || IsTeacher))
+        {
+            StatusMessage = "Для этого раздела нужны права преподавателя или администратора.";
+            return false;
+        }
+        return true;
+    }
+
+    private static bool IsTeacherRole(string role) => string.Equals(role, "teacher", StringComparison.OrdinalIgnoreCase);
+
+    private static int RequireValue(int? value) => value ?? throw new InvalidOperationException("Required value is missing.");
+
+    private static int? NormalizeStudentGroup(int roleId, int? groupId) => roleId == 3 ? groupId : null;
+
+    private string NewUserNameOrSelected() => string.IsNullOrWhiteSpace(NewUserName) ? SelectedUser!.FullName : NewUserName;
+    private string NewUserEmailOrSelected() => string.IsNullOrWhiteSpace(NewUserEmail) ? SelectedUser!.Email : NewUserEmail;
+    private int NewUserRoleIdOrSelected() => NewUserRoleId == 0 ? SelectedUser!.RoleId : NewUserRoleId;
+
+    private void TryAction(string successMessage, Action action, bool refresh = true)
+    {
+        try
+        {
+            IsBusy = true;
+            action();
+            if (refresh)
+            {
+                RefreshAll();
+            }
+            StatusMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void RaiseCommandStates()
     {
         LoginCommand.RaiseCanExecuteChanged();
         LogoutCommand.RaiseCanExecuteChanged();
+        RefreshCommand.RaiseCanExecuteChanged();
+        NavigateDashboardCommand.RaiseCanExecuteChanged();
+        NavigateUsersCommand.RaiseCanExecuteChanged();
+        NavigateGroupsCommand.RaiseCanExecuteChanged();
+        NavigateSubjectsCommand.RaiseCanExecuteChanged();
+        NavigateScheduleCommand.RaiseCanExecuteChanged();
+        NavigateQrCommand.RaiseCanExecuteChanged();
+        NavigateAttendanceCommand.RaiseCanExecuteChanged();
         CreateUserCommand.RaiseCanExecuteChanged();
         UpdateUserCommand.RaiseCanExecuteChanged();
         DeleteUserCommand.RaiseCanExecuteChanged();
@@ -665,11 +694,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         GenerateQrCommand.RaiseCanExecuteChanged();
         ToggleQrStateCommand.RaiseCanExecuteChanged();
         ScanAttendanceCommand.RaiseCanExecuteChanged();
-    }
-
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        CopyLatestQrCommand.RaiseCanExecuteChanged();
     }
 
     private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -681,6 +706,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         field = value;
         OnPropertyChanged(propertyName);
+        if (propertyName is nameof(SelectedUser) or nameof(SelectedGroup) or nameof(SelectedSubject) or nameof(SelectedSchedule) or nameof(SelectedQrSession))
+        {
+            RaiseCommandStates();
+        }
         return true;
     }
+
+    private void OnPropertyChanged(string? propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

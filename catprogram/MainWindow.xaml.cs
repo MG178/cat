@@ -7,12 +7,13 @@ namespace catprogram;
 
 public partial class MainWindow : Window
 {
-    private MainViewModel ViewModel => (MainViewModel)DataContext;
+    public MainViewModel ViewModel { get; }
 
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel();
+        ViewModel = new MainViewModel();
+        DataContext = ViewModel;
         Loaded += MainWindow_Loaded;
     }
 
