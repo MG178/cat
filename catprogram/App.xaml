@@ -1,9 +1,15 @@
 ﻿<Application x:Class="catprogram.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:catprogram"
+             xmlns:conv="clr-namespace:catprogram.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <conv:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
