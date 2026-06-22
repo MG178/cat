@@ -44,6 +44,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private bool _isBusy;
     private string _latestQrCode = string.Empty;
     private string _expiresMinutes = "30";
+    private string _currentPage = "Login";
+
+    public event Action? LoginSucceeded;
+    public event Action? LogoutRequested;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -93,8 +97,22 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public UserItem? CurrentUser
     {
         get => _currentUser;
-        set => SetField(ref _currentUser, value);
+        set
+        {
+            if (SetField(ref _currentUser, value))
+            {
+                OnPropertyChanged(nameof(IsAdmin));
+                OnPropertyChanged(nameof(IsStudent));
+                OnPropertyChanged(nameof(IsAuthenticated));
+            }
+        }
     }
+
+    public bool IsAuthenticated => _currentUser is not null;
+
+    public bool IsAdmin => string.Equals(CurrentUser?.RoleName, "admin", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsStudent => string.Equals(CurrentUser?.RoleName, "student", StringComparison.OrdinalIgnoreCase);
 
     public string LoginEmail
     {
@@ -186,8 +204,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => SetField(ref _newSubjectName, value);
     }
 
+                        OnPropertyChanged(nameof(IsTeacher));
     public int? NewSubjectTeacherId
     {
+                        OnPropertyChanged(nameof(ShowAdminSections));
+                        OnPropertyChanged(nameof(ShowStudentSections));
         get => _newSubjectTeacherId;
         set => SetField(ref _newSubjectTeacherId, value);
     }
@@ -196,9 +217,13 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _newScheduleGroupId;
         set => SetField(ref _newScheduleGroupId, value);
+            public bool IsTeacher => string.Equals(CurrentUser?.RoleName, "teacher", StringComparison.OrdinalIgnoreCase);
     }
 
     public int NewScheduleSubjectId
+            public bool ShowAdminSections => IsLoggedIn && IsAdmin;
+    
+            public bool ShowStudentSections => IsLoggedIn && (IsStudent || IsTeacher || IsAdmin);
     {
         get => _newScheduleSubjectId;
         set => SetField(ref _newScheduleSubjectId, value);
@@ -206,6 +231,11 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public int? NewScheduleTeacherId
     {
+            public string CurrentPage
+            {
+                get => _currentPage;
+                set => SetField(ref _currentPage, value);
+            }
         get => _newScheduleTeacherId;
         set => SetField(ref _newScheduleTeacherId, value);
     }
@@ -276,6 +306,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => SetField(ref _selectedSessionToGenerateFrom, value);
     }
 
+                        CurrentPage = "Shell";
     public bool IsBusy
     {
         get => _isBusy;
@@ -299,6 +330,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public RelayCommand DeleteScheduleCommand { get; }
     public RelayCommand GenerateQrCommand { get; }
     public RelayCommand ToggleQrStateCommand { get; }
+                CurrentPage = "Login";
     public RelayCommand ScanAttendanceCommand { get; }
     public RelayCommand SelectQrFromLatestCommand { get; }
 
@@ -317,6 +349,42 @@ public sealed class MainViewModel : INotifyPropertyChanged
         if (_newUserGroupId is null && Groups.Count > 0)
         {
             _newUserGroupId = Groups[0].Id;
+        }
+                OnPropertyChanged(nameof(CurrentPage));
+                OnPropertyChanged(nameof(IsAdmin));
+                OnPropertyChanged(nameof(IsTeacher));
+                OnPropertyChanged(nameof(IsStudent));
+                OnPropertyChanged(nameof(ShowAdminSections));
+                OnPropertyChanged(nameof(ShowStudentSections));
+
+        if (_newSubjectTeacherId is null && Users.Count > 0)
+        {
+            _newSubjectTeacherId = Users.FirstOrDefault(user => user.RoleName == "teacher")?.Id;
+        }
+
+        if (_newScheduleGroupId == 0 && Groups.Count > 0)
+        {
+            _newScheduleGroupId = Groups[0].Id;
+        }
+
+        if (_newScheduleSubjectId == 0 && Subjects.Count > 0)
+        {
+            _newScheduleSubjectId = Subjects[0].Id;
+        }
+
+        if (_newScheduleTeacherId is null)
+        {
+            _newScheduleTeacherId = Users.FirstOrDefault(user => user.RoleName == "teacher")?.Id;
+        }
+
+        if (_selectedScheduleId is null && Schedules.Count > 0)
+        {
+            _selectedScheduleId = Schedules[0].Id;
+        }
+
+        if (_selectedQrSessionId is null && QrSessions.Count > 0)
+        {
+            _selectedQrSessionId = QrSessions[0].Id;
         }
 
         if (CurrentUser is not null)
@@ -339,6 +407,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 StatusMessage = $"Вход выполнен: {user.FullName}.";
                 SelectedUserId = user.Id;
                 RefreshAll();
+                LoginSucceeded?.Invoke();
                 MessageBox.Show($"Добро пожаловать, {user.FullName}!", "CollegeHub", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             else
@@ -360,6 +429,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         CurrentUser = null;
         StatusMessage = "Сеанс завершен.";
         RaiseCanExecuteChanged();
+        LogoutRequested?.Invoke();
     }
 
     private void CreateUser()

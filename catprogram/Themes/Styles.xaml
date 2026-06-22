@@ -33,6 +33,17 @@
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="#0F1A2A" />
+        <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        <Setter Property="Width" Value="10" />
+    </Style>
+
+    <Style TargetType="Thumb">
+        <Setter Property="Background" Value="#395579" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+
     <Style TargetType="Border" x:Key="CardBorderStyle">
         <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrushSoft}" />
@@ -155,6 +166,8 @@
         </Setter>
     </Style>
 
+    <Style TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}" />
+
     <Style x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
         <Setter Property="Background" Value="#1A2940" />
         <Setter Property="BorderBrush" Value="#314765" />
@@ -165,8 +178,8 @@
     </Style>
 
     <Style x:Key="WindowChromeButtonStyle" TargetType="Button" BasedOn="{StaticResource BaseButtonStyle}">
-        <Setter Property="Width" Value="28" />
-        <Setter Property="Height" Value="28" />
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Background" Value="#1A2940" />
         <Setter Property="BorderBrush" Value="#314765" />
